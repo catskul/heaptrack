@@ -710,13 +710,11 @@ void Parser::parseImpl(const QString& path, const QString& diffBase, const Filte
 
         auto sequential = new Sequence;
         *sequential << parallel << make_job([this, data, path]() {
-            QMetaObject::invokeMethod(this, [this, data, path]() {
-                Q_ASSERT(QThread::currentThread() == thread());
-                m_data = data;
-                m_data->clearForReparse();
-                m_path = path;
-                emit finished();
-            });
+            Q_ASSERT(QThread::currentThread() == thread());
+            m_data = data;
+            m_data->clearForReparse();
+            m_path = path;
+            emit finished();
         });
 
         stream() << sequential;

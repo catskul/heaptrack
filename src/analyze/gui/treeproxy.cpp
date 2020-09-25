@@ -25,7 +25,7 @@ TreeProxy::TreeProxy(int functionColumn, int moduleColumn, QObject* parent)
     , m_functionColumn(functionColumn)
     , m_moduleColumn(moduleColumn)
 {
-    setRecursiveFilteringEnabled(true);
+    //setRecursiveFilteringEnabled(true);
     setSortLocaleAware(false);
 }
 
