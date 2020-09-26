@@ -448,7 +448,7 @@ FlameGraph::FlameGraph(QWidget* parent)
     m_view->viewport()->setMouseTracking(true);
     m_view->setFont(QFont(QStringLiteral("monospace")));
 
-    auto bottomUpCheckbox = new QCheckBox(i18n("Bottom-Down View"), this);
+    auto bottomUpCheckbox = new QCheckBox(i18n("Bottom-Up View"), this);
     bottomUpCheckbox->setToolTip(i18n("Enable the bottom-down flame graph view. When this is unchecked, "
                                       "the top-down view is enabled by default."));
     bottomUpCheckbox->setChecked(m_showBottomUpData);
