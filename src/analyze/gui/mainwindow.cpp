@@ -304,7 +304,8 @@ MainWindow::MainWindow(QWidget* parent)
     m_ui->pages->setCurrentWidget(m_ui->openPage);
     // TODO: proper progress report
     m_ui->loadingProgress->setMinimum(0);
-    m_ui->loadingProgress->setMaximum(0);
+    m_ui->loadingProgress->setMaximum(1000);
+    m_ui->loadingProgress->setValue(0);
 
     auto bottomUpModel = new TreeModel(this);
     auto topDownModel = new TreeModel(this);

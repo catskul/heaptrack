@@ -646,6 +646,24 @@ void Parser::parseImpl(const QString& path, const QString& diffBase, const Filte
 
         emit progressMessageAvailable(isReparsing ? i18n("reparsing data...") : i18n("parsing data..."));
 
+        auto updateProgress = [this](std::shared_ptr<const ParserData> const & data){
+            auto completion = 1.0*data->parsingState.compressedByte/data->parsingState.fileSize;
+            auto message = QString(
+                i18n("reparsing data...\n")
+                    + i18n("\ncurrent timestamp: ") +  Util::formatTime(data->parsingState.timestamp)
+                    + i18n("\ncurrent MiB(uncomp): ") + QString::number(data->parsingState.uncompressedByte/(1024*1024))
+                    + i18n("/ ???")
+                    + i18n("\ncurrent MiB(comp): ") + QString::number(data->parsingState.compressedByte/(1024*1024))
+                    + i18n("/ ") + QString::number(data->parsingState.fileSize/(1024*1024))
+                    + i18n("\ncurrent pass %: ") + QString::number(static_cast<int>(completion * 100))
+                    + i18n("\npass #:   ") +  QString::number(data->parsingState.pass + 1)
+                    + i18n("\nreparsing: ") +  QString::fromStdString(data->parsingState.reparsing ? "yes" : "no")
+            );
+
+            emit progressMessageAvailable(message);
+            emit progress(1000 * completion);
+        };
+
         if (!diffBase.isEmpty()) {
             ParserData diffData;
             auto readBase = async(launch::async, [&diffData, diffBase, isReparsing]() {
@@ -661,9 +679,20 @@ void Parser::parseImpl(const QString& path, const QString& diffBase, const Filte
             }
             data->diff(diffData);
             data->stringCache.diffMode = true;
-        } else if (!data->read(stdPath, isReparsing)) {
-            emit failedToOpen(path);
-            return;
+        } else {
+            data->prepareBuildCharts();
+            auto read = async(launch::async, [&data, stdPath, isReparsing]() {
+                return data->read(stdPath, isReparsing);
+            });
+            while(read.wait_for(std::chrono::milliseconds(5000)) == std::future_status::timeout)
+            {
+                updateProgress(data);
+            }
+            if (!read.get())
+            {
+                emit failedToOpen(path);
+                return;
+            }
         }
 
         if (!isReparsing) {
@@ -685,6 +714,8 @@ void Parser::parseImpl(const QString& path, const QString& diffBase, const Filte
         emit sizeHistogramDataAvailable(sizeHistogram);
         // now data can be modified again for the chart data evaluation
 
+        emit progress(0);
+
         const auto diffMode = data->stringCache.diffMode;
         emit progressMessageAvailable(i18n("building charts..."));
         auto parallel = new Collection;
@@ -697,16 +728,26 @@ void Parser::parseImpl(const QString& path, const QString& diffBase, const Filte
         });
         if (!data->stringCache.diffMode) {
             // only build charts when we are not diffing
-            *parallel << make_job([this, data, stdPath, isReparsing]() {
+            *parallel << make_job([this, data, stdPath, isReparsing, updateProgress]() {
                 // this mutates data, and thus anything running in parallel must
                 // not access data
+                emit progress(0);
                 data->prepareBuildCharts();
-                data->read(stdPath, AccumulatedTraceData::ThirdPass, isReparsing);
+                auto read = async(launch::async, [&data, stdPath, isReparsing]() {
+                    return data->read(stdPath, AccumulatedTraceData::ThirdPass, isReparsing);
+                });
+                while(read.wait_for(std::chrono::milliseconds(1000)) == std::future_status::timeout)
+                {
+                    auto completion = 1.0*data->parsingState.compressedByte/data->parsingState.fileSize;
+                    emit progress(1000 * completion);
+                }
                 emit consumedChartDataAvailable(data->consumedChartData);
                 emit allocationsChartDataAvailable(data->allocationsChartData);
                 emit temporaryChartDataAvailable(data->temporaryChartData);
             });
         }
+
+        emit progress(0);
 
         auto sequential = new Sequence;
         *sequential << parallel << make_job([this, data, path]() {
